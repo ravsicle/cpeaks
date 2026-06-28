@@ -53,21 +53,13 @@
 
 static double cell_aspect = 2.0; /* glyph height/width ratio (tall cells)    */
 
-/* Matrix glyph set for the falling rain (random, no wide chars). */
+/* Matrix glyph set (no wide chars: portable everywhere). */
 static const char *GLYPHS =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     "abcdefghijklmnopqrstuvwxyz"
     "0123456789"
     "@#$%&*+=-<>{}[]()/\\|?!:;";
 static int N_GLYPHS;
-
-/* Tonal ramp (light -> dense) for the SETTLED image: each cell picks a glyph
- * by its brightness, so the picture is carried by glyph density as well as
- * colour. Dark cells become spaces (black negative space); bright cells become
- * dense bold glyphs. This is what makes the statue read in real terminal text. */
-static const char *RAMP =
-    " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
-static int RAMP_LEN;
 
 /* Region tags (drift only the curtains). */
 enum { R_CURTAIN = 0, R_STATUE = 1, R_FLOOR = 2, R_DARK = 3 };
@@ -343,13 +335,7 @@ static void build_target(int c, int r_) {
             int pi = nearest_img(r,g,b);
             int idx = CELL(y,x);
             t_pal[idx]   = pi;
-            /* glyph by brightness: tonal ramp index (dark->space, bright->dense) */
-            int lum = (299*r + 587*g + 114*b) / 1000;
-            double f = lum / 255.0;
-            f = pow(f, 1.15);                       /* deepen shadows a touch     */
-            int gi = (int)(f * (RAMP_LEN - 1) + 0.5);
-            if (gi < 0) gi = 0; if (gi >= RAMP_LEN) gi = RAMP_LEN - 1;
-            t_glyph[idx] = gi;
+            t_glyph[idx] = rand() % N_GLYPHS;
             t_rgb[idx*3+0] = pal[pi][0];
             t_rgb[idx*3+1] = pal[pi][1];
             t_rgb[idx*3+2] = pal[pi][2];
@@ -384,7 +370,7 @@ static void blit_glyph(unsigned char *out, int W, int ox, int oy,
 
 /* render the settled mosaic as real colour-on-black glyphs, like the terminal */
 static int snapshot(const char *path, int c, int r_) {
-    N_GLYPHS = strlen(GLYPHS); RAMP_LEN = strlen(RAMP);
+    N_GLYPHS = strlen(GLYPHS);
     build_target(c, r_);
     int cw = 8, ch = 16;                 /* px per cell (2:1)               */
     int W = cols*cw, H = rows*ch;
@@ -392,7 +378,7 @@ static int snapshot(const char *path, int c, int r_) {
     for (int y = 0; y < rows; y++)
         for (int x = 0; x < cols; x++) {
             int idx = CELL(y,x);
-            blit_glyph(out, W, x*cw, y*ch, RAMP[t_glyph[idx]], &t_rgb[idx*3]);
+            blit_glyph(out, W, x*cw, y*ch, GLYPHS[t_glyph[idx]], &t_rgb[idx*3]);
         }
     int ok = stbi_write_png(path, W, H, 3, out, W*3);
     free(out);
@@ -401,7 +387,7 @@ static int snapshot(const char *path, int c, int r_) {
 
 /* region-debug snapshot: paints regions as flat colours */
 static int snapshot_regions(const char *path, int c, int r_) {
-    N_GLYPHS = strlen(GLYPHS); RAMP_LEN = strlen(RAMP);
+    N_GLYPHS = strlen(GLYPHS);
     build_target(c, r_);
     int cw = 8, ch = 16;
     int W = cols*cw, H = rows*ch;
@@ -460,18 +446,11 @@ static void init_colors(void) {
     }
 }
 
-static inline void draw_chr(int y, int x, char ch, int palidx, int bold) {
+static inline void draw_cell(int y, int x, int glyph, int palidx, int bold) {
     attr_t a = COLOR_PAIR(palidx + 1);
     if (bold) a |= A_BOLD;
     attrset(a);
-    mvaddch(y, x, (chtype)(unsigned char)ch);
-}
-
-/* draw a settled image cell: tonal glyph, with bold on the brightest cells */
-static inline void draw_settled(int y, int x, int idx) {
-    int gi = t_glyph[idx];
-    int bold = gi > (int)(RAMP_LEN * 0.70);
-    draw_chr(y, x, RAMP[gi], t_pal[idx], bold);
+    mvaddch(y, x, GLYPHS[glyph]);
 }
 
 /* nearest palette index across the FULL palette (img + rain) for drift/glow */
@@ -527,7 +506,7 @@ static int fall_frame(int speed_div) {
             int idx = CELL(y,x);
             if (y <= hy - GLOW) {
                 /* fully cooled -> settled image */
-                draw_settled(y, x, idx);
+                draw_cell(y, x, t_glyph[idx], t_pal[idx], 0);
             } else if (y <= hy) {
                 /* glow tail: hot near the head, cooling into the image */
                 double d = hy - y;                 /* 0 at head .. GLOW up    */
@@ -539,9 +518,8 @@ static int fall_frame(int speed_div) {
                 int g = (int)(hg*(1-f) + tg*f);
                 int b = (int)(hb*(1-f) + tb*f);
                 int pi = nearest_full(r,g,b);
-                /* random matrix glyph near the head, settling to the tonal glyph */
-                char ch = (d < 1.5) ? GLYPHS[rand()%N_GLYPHS] : RAMP[t_glyph[idx]];
-                draw_chr(y, x, ch, pi, d < 2.0);
+                int glyph = (d < 1.5) ? (rand()%N_GLYPHS) : t_glyph[idx];
+                draw_cell(y, x, glyph, pi, d < 2.0);
             } else {
                 /* not yet reached */
                 mvaddch(y, x, ' ');
@@ -559,7 +537,7 @@ static void drift_frame(double t) {
         for (int x = 0; x < cols; x++) {
             int idx = CELL(y,x);
             if (t_region[idx] != R_CURTAIN) {
-                draw_settled(y, x, idx);
+                draw_cell(y, x, t_glyph[idx], t_pal[idx], 0);
                 continue;
             }
             double sx = t_sx[idx];
@@ -573,8 +551,7 @@ static void drift_frame(double t) {
             int gg = clampi((int)(g*m), 0, 255);
             int bb = clampi((int)(b*m), 0, 255);
             int pi = nearest_full(rr,gg,bb);
-            int gi = t_glyph[idx];
-            draw_chr(y, x, RAMP[gi], pi, gi > (int)(RAMP_LEN*0.70));
+            draw_cell(y, x, t_glyph[idx], pi, 0);
         }
     }
 }
@@ -640,7 +617,6 @@ int main(int argc, char **argv) {
     setlocale(LC_ALL, "");
     srand((unsigned)time(NULL) ^ (unsigned)getpid());
     N_GLYPHS = strlen(GLYPHS);
-    RAMP_LEN = strlen(RAMP);
 
     int speed_div = 1, do_drift = 1;
     const char *snap = NULL, *regf = NULL;
