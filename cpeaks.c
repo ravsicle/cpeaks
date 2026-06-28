@@ -2,10 +2,10 @@
  * cpeaks - a Twin Peaks "Red Room" themed Matrix-rain for your terminal.
  *
  * Spiritual fork of cmatrix (Chris Allegretta / Abishek V Ashok, GPL-3.0).
- * Red rain falls from the top and settles into an ASCII glyph-mosaic of the
- * Red Room - the Venus de Milo statue framed against drifting red curtains
- * and the black/white chevron floor. Once the image forms, the curtains
- * drift slowly as if in a warm breeze. Press any key to leave.
+ * The Red Room - the Venus de Milo statue framed against red curtains and the
+ * black/white chevron floor - fades up out of black as an ASCII glyph-mosaic,
+ * with the curtains already drifting slowly as if in a warm breeze. Press any
+ * key to leave.
  *
  * The image is embedded in the binary and quantized to a bespoke 240-colour
  * palette derived from the photo itself, so the colour scheme stays faithful.
@@ -478,79 +478,39 @@ static double now_sec(void) {
 
 static void msleep(int ms){ struct timespec t={ms/1000,(ms%1000)*1000000L}; nanosleep(&t,NULL); }
 
-/* per-column fall state */
-static double *head = NULL;   /* current front row (grows past rows)         */
-static double *spd  = NULL;
-static int    *taillen = NULL;
+/* Fade-in from black, with the curtains already drifting underneath -------- */
 
-#define GLOW 7
+#define FADE_SEC 1.7   /* seconds to fade up from black                        */
 
-static void fall_init(void) {
-    free(head); free(spd); free(taillen);
-    head = malloc(sizeof(double)*cols);
-    spd  = malloc(sizeof(double)*cols);
-    taillen = malloc(sizeof(int)*cols);
-    for (int x = 0; x < cols; x++) {
-        head[x] = -(rand() % (rows/3 + GLOW));    /* tight staggered start    */
-        spd[x]  = 1.4 + (rand()%100)/100.0*1.2;   /* fast async fall (~2s)    */
-        taillen[x] = GLOW;
-    }
-}
-
-/* render one fall frame; returns 1 when every column has fully settled */
-static int fall_frame(int speed_div) {
-    int settled = 1;
-    for (int x = 0; x < cols; x++) {
-        double hy = head[x];
-        for (int y = 0; y < rows; y++) {
-            int idx = CELL(y,x);
-            if (y <= hy - GLOW) {
-                /* fully cooled -> settled image */
-                draw_cell(y, x, t_glyph[idx], t_pal[idx], 0);
-            } else if (y <= hy) {
-                /* glow tail: hot near the head, cooling into the image */
-                double d = hy - y;                 /* 0 at head .. GLOW up    */
-                double f = d / (double)GLOW;        /* 0 hot .. 1 cool         */
-                int hr=236,hg=52,hb=48;             /* hot red reference       */
-                if (d < 0.8) { hr=255; hg=232; hb=226; } /* bright head        */
-                int tr = t_rgb[idx*3+0], tg = t_rgb[idx*3+1], tb = t_rgb[idx*3+2];
-                int r = (int)(hr*(1-f) + tr*f);
-                int g = (int)(hg*(1-f) + tg*f);
-                int b = (int)(hb*(1-f) + tb*f);
-                int pi = nearest_full(r,g,b);
-                int glyph = (d < 1.5) ? (rand()%N_GLYPHS) : t_glyph[idx];
-                draw_cell(y, x, glyph, pi, d < 2.0);
-            } else {
-                /* not yet reached */
-                mvaddch(y, x, ' ');
-            }
-        }
-        if (hy - GLOW < rows - 1) settled = 0;
-        head[x] += spd[x] / (double)speed_div;
-    }
-    return settled;
-}
-
-/* curtain drift: a slow horizontal luminance wave (warm breeze) */
-static void drift_frame(double t) {
+/* Draw one frame. `fade` in [0,1] scales every cell's colour up from black, so
+ * the picture fades in; the curtains drift the whole time (already in motion
+ * as the image appears). Cells too dim to see are drawn as black space, so the
+ * image emerges out of darkness. */
+static void render_frame(double t, double fade, int do_drift) {
+    int full = fade >= 0.999;
     for (int y = 0; y < rows; y++) {
         for (int x = 0; x < cols; x++) {
             int idx = CELL(y,x);
-            if (t_region[idx] != R_CURTAIN) {
+            int r, g, b;
+            if (do_drift && t_region[idx] == R_CURTAIN) {
+                /* two travelling waves of different speed/length -> warm breeze */
+                double sx = t_sx[idx];
+                double w = 0.55*sin(sx*9.0  - t*0.82)
+                         + 0.45*sin(sx*17.0 - t*1.22 + y*0.05);
+                double m = 1.0 + 0.26*w;
+                r = (int)(t_rgb[idx*3+0]*m);
+                g = (int)(t_rgb[idx*3+1]*m);
+                b = (int)(t_rgb[idx*3+2]*m);
+            } else if (full) {
+                /* static cell, fully faded in: settled palette, fast path */
                 draw_cell(y, x, t_glyph[idx], t_pal[idx], 0);
                 continue;
+            } else {
+                r = t_rgb[idx*3+0]; g = t_rgb[idx*3+1]; b = t_rgb[idx*3+2];
             }
-            double sx = t_sx[idx];
-            /* two travelling waves of different speed/length for organic folds */
-            double w = 0.55*sin(sx*9.0  - t*0.82)
-                     + 0.45*sin(sx*17.0 - t*1.22 + y*0.05);
-            double amp = 0.26;
-            int r = t_rgb[idx*3+0], g = t_rgb[idx*3+1], b = t_rgb[idx*3+2];
-            double m = 1.0 + amp*w;
-            int rr = clampi((int)(r*m), 0, 255);
-            int gg = clampi((int)(g*m), 0, 255);
-            int bb = clampi((int)(b*m), 0, 255);
-            int pi = nearest_full(rr,gg,bb);
+            if (!full) { r = (int)(r*fade); g = (int)(g*fade); b = (int)(b*fade); }
+            if (r + g + b < 12) { mvaddch(y, x, ' '); continue; }  /* still black */
+            int pi = nearest_full(clampi(r,0,255), clampi(g,0,255), clampi(b,0,255));
             draw_cell(y, x, t_glyph[idx], pi, 0);
         }
     }
@@ -563,35 +523,26 @@ static void run(int speed_div, int do_drift) {
     noecho(); curs_set(0); cbreak(); nodelay(stdscr, TRUE); keypad(stdscr, TRUE);
     signal(SIGWINCH, on_winch);
 
-    int frame_ms = 33;
+    double fade_sec = FADE_SEC * speed_div;
 
 rebuild:
     getmaxyx(stdscr, rows, cols);
     build_target(cols, rows);
     bkgd(COLOR_PAIR(0));
     erase();
-    fall_init();
 
-    /* fall phase */
-    for (;;) {
-        if (resized) { resized = 0; endwin(); refresh(); goto rebuild; }
-        int ch = getch();
-        if (ch != ERR) { endwin(); return; }
-        int done = fall_frame(speed_div);
-        refresh();
-        if (done) break;
-        msleep(frame_ms);
-    }
-
-    /* drift phase (forever, until a key) */
+    /* fade in from black while the drift is already running; then drift forever */
     double t0 = now_sec();
     for (;;) {
         if (resized) { resized = 0; endwin(); refresh(); goto rebuild; }
         int ch = getch();
         if (ch != ERR) { endwin(); return; }
-        if (do_drift) drift_frame(now_sec() - t0);
+        double t = now_sec() - t0;
+        double fade = t / fade_sec;
+        if (fade > 1.0) fade = 1.0;
+        render_frame(t, fade, do_drift);
         refresh();
-        msleep(do_drift ? 55 : 120);
+        msleep(do_drift ? 45 : 70);
     }
 }
 
@@ -603,9 +554,9 @@ static void usage(void) {
     printf(
 "cpeaks - Twin Peaks Red Room Matrix rain\n\n"
 "Usage: cpeaks [options]\n"
-"  -u N           update delay / speed divisor (1-10, default 1; higher=slower)\n"
+"  -u N           speed divisor (1-10, default 1; higher=slower fade & drift)\n"
 "  -a F           cell aspect ratio (height/width, default 2.0)\n"
-"  -n             no curtain drift (settle and hold)\n"
+"  -n             no curtain drift (fade in and hold)\n"
 "  --snapshot F [W H]   render the settled image to PNG F (default grid 100x46)\n"
 "  --regions F [W H]    render the region map to PNG F (debug)\n"
 "  -h             this help\n"

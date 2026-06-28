@@ -13,11 +13,10 @@ falling-character magic at the Red Room. If you enjoy this, please go star
 [cmatrix](https://github.com/abishekvashok/cmatrix) — that's the original, and
 the one that deserves the credit. 🌹
 
-Run `cpeaks` and deep-red rain falls from the top of the screen, settling into
-an ASCII glyph-mosaic of the iconic Red Room: the Venus de Milo statue framed
-against red curtains and the black-and-white chevron floor. Once the image
-forms, the **curtains drift slowly as if in a warm breeze**. Press any key to
-leave.
+Run `cpeaks` and the iconic Red Room **fades up out of black** as an ASCII
+glyph-mosaic — the Venus de Milo statue framed against red curtains and the
+black-and-white chevron floor — with the **curtains already drifting slowly as
+if in a warm breeze** the whole time it appears. Press any key to leave.
 
 ![the settled image, rendered as real colour-on-black glyphs](docs/snap.png)
 
@@ -35,11 +34,11 @@ as it appears in the terminal. Larger terminals give a sharper statue.*
   itself. On terminals that allow palette redefinition (most modern ones, via
   ncurses + `initc`), those exact colours are loaded; otherwise it falls back to
   the nearest xterm-256 colours.
-- **Every cell is a character.** Like cmatrix, the picture is made of falling
-  glyphs — colour carries the image, the letters keep the Matrix soul.
-- **Red rain → settle → drift.** Each column falls at its own speed with a hot
-  leading edge that cools into the final image colour; when every column has
-  landed, the curtains begin their slow breeze-driven shimmer.
+- **Every cell is a character.** Like cmatrix, the picture is made of glyphs —
+  colour carries the image, the letters keep the Matrix soul.
+- **Fade from black → drift.** The image fades up out of darkness while the
+  curtains are already drifting, so it arrives in motion rather than snapping
+  into place; then the warm-breeze shimmer continues for as long as you watch.
 
 ## Build
 
