@@ -480,7 +480,7 @@ static void msleep(int ms){ struct timespec t={ms/1000,(ms%1000)*1000000L}; nano
 
 /* Fade-in from black, with the curtains already drifting underneath -------- */
 
-#define FADE_SEC 3.7   /* seconds to fade up from black                        */
+#define FADE_SEC 3.0   /* seconds to fade up from black                        */
 
 /* Draw one frame. `fade` in [0,1] scales every cell's colour up from black, so
  * the picture fades in; the curtains drift the whole time (already in motion
