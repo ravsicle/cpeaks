@@ -1,0 +1,82 @@
+# cpeaks
+
+> *"Through the darkness of future past, the magician longs to see. One chants
+> out between two worlds: Fire, walk with me."*
+
+A Twin Peaks **Red Room** themed Matrix-rain for your terminal — a spiritual
+fork of [cmatrix](https://github.com/abishekvashok/cmatrix).
+
+Run `cpeaks` and deep-red rain falls from the top of the screen, settling into
+an ASCII glyph-mosaic of the iconic Red Room: the Venus de Milo statue framed
+against red curtains and the black-and-white chevron floor. Once the image
+forms, the **curtains drift slowly as if in a warm breeze**. Press any key to
+leave.
+
+![the settled image](docs/snap.png)
+
+## How it works
+
+- **The statue is the hero.** Framing is anchored on the statue's focal point
+  and scaled so it stays centred and fully visible regardless of your terminal's
+  aspect ratio. Wide terminals show more curtain to the sides; tall ones trim
+  the outer drapes — the statue never moves.
+- **Faithful colour.** The reference photo is embedded in the binary and
+  quantized (median-cut) to a bespoke 240-colour palette derived from the image
+  itself. On terminals that allow palette redefinition (most modern ones, via
+  ncurses + `initc`), those exact colours are loaded; otherwise it falls back to
+  the nearest xterm-256 colours.
+- **Every cell is a character.** Like cmatrix, the picture is made of falling
+  glyphs — colour carries the image, the letters keep the Matrix soul.
+- **Red rain → settle → drift.** Each column falls at its own speed with a hot
+  leading edge that cools into the final image colour; when every column has
+  landed, the curtains begin their slow breeze-driven shimmer.
+
+## Build
+
+Requires a C compiler and ncurses.
+
+```sh
+make
+./cpeaks
+```
+
+Install to `/usr/local/bin`:
+
+```sh
+sudo make install
+```
+
+## Usage
+
+```
+cpeaks [options]
+  -u N    update delay / speed divisor (1-10, default 3; higher = slower)
+  -a F    cell aspect ratio (height/width, default 2.0)
+  -n      no curtain drift (settle and hold)
+  -h      help
+  -V      version
+```
+
+Press **any key** while running to exit (screensaver behaviour).
+
+### Verification / debug
+
+```
+cpeaks --snapshot out.png [W H]   # render the settled mosaic to a PNG
+cpeaks --regions  out.png [W H]   # render the drift region map (debug)
+```
+
+These let you preview the framing and colour exactly as the animation will
+settle, without watching a live terminal.
+
+## Credits
+
+- Based on **cmatrix** by Chris Allegretta and Abishek V Ashok.
+- Image decoding/encoding via [stb](https://github.com/nothings/stb)
+  (`stb_image.h`, `stb_image_write.h`, public domain).
+- *Twin Peaks* is © its respective rights holders; this is an unaffiliated
+  fan tribute.
+
+## License
+
+GPL-3.0, inheriting cmatrix's license.
