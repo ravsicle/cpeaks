@@ -97,24 +97,52 @@ static void load_image(void) {
     }
 }
 
-/* Brighten + add contrast (and a touch of saturation so the reds stay rich).
- * Applied once to the source so the live render and snapshot stay identical. */
-static double e_contrast = 1.30;   /* >1 = more contrast            */
-static double e_bright   = 30.0;   /* additive lift (brighter)      */
-static double e_sat      = 1.26;   /* >1 = richer colour            */
+/* Brighten + add contrast, with SELECTIVE saturation: vivid reds get richer,
+ * but low-chroma pixels (the marble statue, the white chevrons under the red
+ * light) get pulled back toward neutral so they read as stone/white instead of
+ * red. Applied once to the source so live render and snapshot stay identical. */
+static double e_contrast   = 1.30;   /* >1 = more contrast                    */
+static double e_bright     = 30.0;   /* additive lift (brighter)              */
+static double e_sat_vivid  = 1.22;   /* saturation mult for vivid pixels      */
+static double e_sat_neutral= 0.42;   /* saturation mult for near-neutral ones */
+static double e_chroma_lo  = 30.0;   /* below this chroma -> treat as neutral */
+static double e_chroma_hi  = 120.0;  /* above this chroma -> treat as vivid   */
+
+static double smoothstep(double a, double b, double x) {
+    if (b <= a) return x < a ? 0.0 : 1.0;
+    double t = (x - a) / (b - a);
+    if (t < 0) t = 0; if (t > 1) t = 1;
+    return t * t * (3.0 - 2.0 * t);
+}
 
 static void enhance_image(void) {
     long n = (long)iw * ih;
     for (long i = 0; i < n; i++) {
+        double sy_norm = (double)(i / iw) / ih;
+        int floor = sy_norm > FLOOR_LINE;
         double c[3];
         for (int k = 0; k < 3; k++) {
             double v = img[i*3 + k];
             v = (v - 128.0) * e_contrast + 128.0 + e_bright;   /* contrast+bright */
             c[k] = v;
         }
+        double mx = c[0] > c[1] ? (c[0] > c[2] ? c[0] : c[2]) : (c[1] > c[2] ? c[1] : c[2]);
+        double mn = c[0] < c[1] ? (c[0] < c[2] ? c[0] : c[2]) : (c[1] < c[2] ? c[1] : c[2]);
+        double chroma = mx - mn;
+        double t = smoothstep(e_chroma_lo, e_chroma_hi, chroma);
+        double satmul = e_sat_neutral * (1.0 - t) + e_sat_vivid * t;
         double gray = 0.299*c[0] + 0.587*c[1] + 0.114*c[2];
+
+        /* Floor: whiten the LIGHT chevron stripes toward neutral white while
+         * leaving the dark stripes dark, so the zigzag reads white-on-dark. */
+        double whiten = 0.0;
+        if (floor) {
+            double lightness = smoothstep(120.0, 200.0, gray);  /* light stripe? */
+            satmul *= (1.0 - 0.75 * lightness);                  /* desaturate lights */
+            whiten = 22.0 * lightness;                           /* lift toward white */
+        }
         for (int k = 0; k < 3; k++) {
-            double v = gray + (c[k] - gray) * e_sat;           /* saturation     */
+            double v = gray + (c[k] - gray) * satmul + whiten;
             if (v < 0) v = 0; if (v > 255) v = 255;
             img[i*3 + k] = (unsigned char)(v + 0.5);
         }
