@@ -3,8 +3,15 @@
 > *"Through the darkness of future past, the magician longs to see. One chants
 > out between two worlds: Fire, walk with me."*
 
-A Twin Peaks **Red Room** themed Matrix-rain for your terminal — a spiritual
-fork of [cmatrix](https://github.com/abishekvashok/cmatrix).
+A Twin Peaks **Red Room** themed Matrix-rain for your terminal.
+
+cpeaks is a loving homage to [**cmatrix**](https://github.com/abishekvashok/cmatrix)
+— the wonderful terminal Matrix-rain originally written by **Chris Allegretta**
+(author of GNU nano) and maintained and improved for years by **Abishek V Ashok**.
+cpeaks exists only because their project is so good; all we did was point its
+falling-character magic at the Red Room. If you enjoy this, please go star
+[cmatrix](https://github.com/abishekvashok/cmatrix) — that's the original, and
+the one that deserves the credit. 🌹
 
 Run `cpeaks` and deep-red rain falls from the top of the screen, settling into
 an ASCII glyph-mosaic of the iconic Red Room: the Venus de Milo statue framed
@@ -69,13 +76,18 @@ cpeaks --regions  out.png [W H]   # render the drift region map (debug)
 These let you preview the framing and colour exactly as the animation will
 settle, without watching a live terminal.
 
-## Credits
+## Homage & credits
 
-- Based on **cmatrix** by Chris Allegretta and Abishek V Ashok.
+First and foremost, **thank you to the cmatrix project and its authors.**
+
+- [**cmatrix**](https://github.com/abishekvashok/cmatrix) — the original, and the
+  reason cpeaks exists. Created by **Chris Allegretta** and maintained/improved
+  by **Abishek V Ashok** and its many contributors. cpeaks is a respectful,
+  unaffiliated tribute to their work; please support and star the original.
 - Image decoding/encoding via [stb](https://github.com/nothings/stb)
   (`stb_image.h`, `stb_image_write.h`, public domain).
 - *Twin Peaks* is © its respective rights holders; this is an unaffiliated
-  fan tribute.
+  fan tribute made out of love for the show.
 
 ## License
 
