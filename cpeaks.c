@@ -135,30 +135,21 @@ static void enhance_image(void) {
             double chroma = mx - mn;
             double redness = c[0] - (c[1] > c[2] ? c[1] : c[2]);
 
+            double L, S;   /* target luminance, saturation multiplier */
+
             int in_statue = (sx > ST_X0 && sx < ST_X1 && sy > ST_Y0 && sy < ST_Y1
                              && redness < ST_REDNESS);
             int in_floor  = (sy > FLOOR_LINE);
 
-            if (in_floor) {
-                /* Chevron floor: remap by brightness onto the Red Room's
-                 * cream <-> dark-brown zigzag, removing the red cast entirely
-                 * while keeping the light/dark pattern. */
-                double ln = smoothstep(72.0, 178.0, gray);  /* 0 dark .. 1 cream */
-                double cream[3] = { 218.0, 204.0, 172.0 };
-                double brown[3] = {  74.0,  46.0,  40.0 };
-                for (int k = 0; k < 3; k++) {
-                    double v = brown[k]*(1.0-ln) + cream[k]*ln;
-                    if (v < 0) v = 0; if (v > 255) v = 255;
-                    img[i*3+k] = (unsigned char)(v + 0.5);
-                }
-                continue;
-            }
-
-            double L, S;   /* target luminance, saturation multiplier */
             if (in_statue) {
                 /* bright marble: lift luminance, near-neutral */
                 L = gray * 1.10 + 58.0;
                 S = 0.24;
+            } else if (in_floor) {
+                double light = smoothstep(120.0, 200.0, gray); /* light stripe? */
+                double t = smoothstep(30.0, 120.0, chroma);
+                S = (0.42*(1.0-t) + 1.18*t) * (1.0 - 0.75*light);
+                L = gray + 6.0 + 26.0*light;                   /* whiten lights */
             } else {
                 /* curtain: deep rich red, only a small lift so it recedes */
                 double t = smoothstep(30.0, 120.0, chroma);
