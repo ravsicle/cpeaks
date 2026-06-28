@@ -97,16 +97,20 @@ static void load_image(void) {
     }
 }
 
-/* Brighten + add contrast, with SELECTIVE saturation: vivid reds get richer,
- * but low-chroma pixels (the marble statue, the white chevrons under the red
- * light) get pulled back toward neutral so they read as stone/white instead of
- * red. Applied once to the source so live render and snapshot stay identical. */
-static double e_contrast   = 1.30;   /* >1 = more contrast                    */
-static double e_bright     = 30.0;   /* additive lift (brighter)              */
-static double e_sat_vivid  = 1.22;   /* saturation mult for vivid pixels      */
-static double e_sat_neutral= 0.42;   /* saturation mult for near-neutral ones */
-static double e_chroma_lo  = 30.0;   /* below this chroma -> treat as neutral */
-static double e_chroma_hi  = 120.0;  /* above this chroma -> treat as vivid   */
+/* Region-aware relighting so the statue is the luminance hero:
+ *  - STATUE: bright marble, strongly desaturated (pops against the red).
+ *  - FLOOR : whiten the light chevron stripes, keep dark stripes dark.
+ *  - CURTAIN: deep, rich red that recedes (modest lift only) so it doesn't
+ *    out-shine the statue.
+ * Applied once to the source so live render and snapshot stay identical. */
+static double e_contrast = 1.28;     /* global contrast (>1 = more)           */
+
+/* statue visual box (tight) + how "not red" a pixel must be to count as marble */
+#define ST_X0 0.40
+#define ST_X1 0.64
+#define ST_Y0 0.13
+#define ST_Y1 0.62
+#define ST_REDNESS 64.0              /* R-max(G,B) below this -> marble, not drape */
 
 static double smoothstep(double a, double b, double x) {
     if (b <= a) return x < a ? 0.0 : 1.0;
@@ -116,35 +120,48 @@ static double smoothstep(double a, double b, double x) {
 }
 
 static void enhance_image(void) {
-    long n = (long)iw * ih;
-    for (long i = 0; i < n; i++) {
-        double sy_norm = (double)(i / iw) / ih;
-        int floor = sy_norm > FLOOR_LINE;
-        double c[3];
-        for (int k = 0; k < 3; k++) {
-            double v = img[i*3 + k];
-            v = (v - 128.0) * e_contrast + 128.0 + e_bright;   /* contrast+bright */
-            c[k] = v;
-        }
-        double mx = c[0] > c[1] ? (c[0] > c[2] ? c[0] : c[2]) : (c[1] > c[2] ? c[1] : c[2]);
-        double mn = c[0] < c[1] ? (c[0] < c[2] ? c[0] : c[2]) : (c[1] < c[2] ? c[1] : c[2]);
-        double chroma = mx - mn;
-        double t = smoothstep(e_chroma_lo, e_chroma_hi, chroma);
-        double satmul = e_sat_neutral * (1.0 - t) + e_sat_vivid * t;
-        double gray = 0.299*c[0] + 0.587*c[1] + 0.114*c[2];
+    for (int y = 0; y < ih; y++) {
+        double sy = (double)y / ih;
+        for (int x = 0; x < iw; x++) {
+            double sx = (double)x / iw;
+            long i = (long)y * iw + x;
+            double c[3];
+            for (int k = 0; k < 3; k++)
+                c[k] = (img[i*3+k] - 128.0) * e_contrast + 128.0;   /* contrast */
 
-        /* Floor: whiten the LIGHT chevron stripes toward neutral white while
-         * leaving the dark stripes dark, so the zigzag reads white-on-dark. */
-        double whiten = 0.0;
-        if (floor) {
-            double lightness = smoothstep(120.0, 200.0, gray);  /* light stripe? */
-            satmul *= (1.0 - 0.75 * lightness);                  /* desaturate lights */
-            whiten = 22.0 * lightness;                           /* lift toward white */
-        }
-        for (int k = 0; k < 3; k++) {
-            double v = gray + (c[k] - gray) * satmul + whiten;
-            if (v < 0) v = 0; if (v > 255) v = 255;
-            img[i*3 + k] = (unsigned char)(v + 0.5);
+            double gray = 0.299*c[0] + 0.587*c[1] + 0.114*c[2];
+            double mx = c[0]>c[1]?(c[0]>c[2]?c[0]:c[2]):(c[1]>c[2]?c[1]:c[2]);
+            double mn = c[0]<c[1]?(c[0]<c[2]?c[0]:c[2]):(c[1]<c[2]?c[1]:c[2]);
+            double chroma = mx - mn;
+            double redness = c[0] - (c[1] > c[2] ? c[1] : c[2]);
+
+            double L, S;   /* target luminance, saturation multiplier */
+
+            int in_statue = (sx > ST_X0 && sx < ST_X1 && sy > ST_Y0 && sy < ST_Y1
+                             && redness < ST_REDNESS);
+            int in_floor  = (sy > FLOOR_LINE);
+
+            if (in_statue) {
+                /* bright marble: lift luminance, near-neutral */
+                L = gray * 1.10 + 58.0;
+                S = 0.24;
+            } else if (in_floor) {
+                double light = smoothstep(120.0, 200.0, gray); /* light stripe? */
+                double t = smoothstep(30.0, 120.0, chroma);
+                S = (0.42*(1.0-t) + 1.18*t) * (1.0 - 0.75*light);
+                L = gray + 6.0 + 26.0*light;                   /* whiten lights */
+            } else {
+                /* curtain: deep rich red, only a small lift so it recedes */
+                double t = smoothstep(30.0, 120.0, chroma);
+                S = 0.45*(1.0-t) + 1.20*t;
+                L = gray * 0.94 + 10.0;
+            }
+
+            for (int k = 0; k < 3; k++) {
+                double v = L + (c[k] - gray) * S;
+                if (v < 0) v = 0; if (v > 255) v = 255;
+                img[i*3+k] = (unsigned char)(v + 0.5);
+            }
         }
     }
 }
