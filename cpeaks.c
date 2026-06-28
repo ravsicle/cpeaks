@@ -422,8 +422,8 @@ static void fall_init(void) {
     spd  = malloc(sizeof(double)*cols);
     taillen = malloc(sizeof(int)*cols);
     for (int x = 0; x < cols; x++) {
-        head[x] = -(rand() % (rows/2 + GLOW));    /* tighter staggered start  */
-        spd[x]  = 0.7 + (rand()%100)/100.0*0.8;   /* async speeds (~5x prior) */
+        head[x] = -(rand() % (rows/3 + GLOW));    /* tight staggered start    */
+        spd[x]  = 1.4 + (rand()%100)/100.0*1.2;   /* fast async fall (~2s)    */
         taillen[x] = GLOW;
     }
 }
@@ -473,8 +473,8 @@ static void drift_frame(double t) {
             }
             double sx = t_sx[idx];
             /* two travelling waves of different speed/length for organic folds */
-            double w = 0.55*sin(sx*9.0  - t*0.55)
-                     + 0.45*sin(sx*17.0 - t*0.85 + y*0.05);
+            double w = 0.55*sin(sx*9.0  - t*0.82)
+                     + 0.45*sin(sx*17.0 - t*1.22 + y*0.05);
             double amp = 0.26;
             int r = t_rgb[idx*3+0], g = t_rgb[idx*3+1], b = t_rgb[idx*3+2];
             double m = 1.0 + amp*w;
