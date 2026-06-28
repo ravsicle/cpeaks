@@ -97,6 +97,30 @@ static void load_image(void) {
     }
 }
 
+/* Brighten + add contrast (and a touch of saturation so the reds stay rich).
+ * Applied once to the source so the live render and snapshot stay identical. */
+static double e_contrast = 1.30;   /* >1 = more contrast            */
+static double e_bright   = 30.0;   /* additive lift (brighter)      */
+static double e_sat      = 1.26;   /* >1 = richer colour            */
+
+static void enhance_image(void) {
+    long n = (long)iw * ih;
+    for (long i = 0; i < n; i++) {
+        double c[3];
+        for (int k = 0; k < 3; k++) {
+            double v = img[i*3 + k];
+            v = (v - 128.0) * e_contrast + 128.0 + e_bright;   /* contrast+bright */
+            c[k] = v;
+        }
+        double gray = 0.299*c[0] + 0.587*c[1] + 0.114*c[2];
+        for (int k = 0; k < 3; k++) {
+            double v = gray + (c[k] - gray) * e_sat;           /* saturation     */
+            if (v < 0) v = 0; if (v > 255) v = 255;
+            img[i*3 + k] = (unsigned char)(v + 0.5);
+        }
+    }
+}
+
 /* median cut over a (subsampled) pixel array -> N_IMG colours */
 typedef struct { unsigned char r, g, b; } RGB;
 static int mc_channel;
@@ -572,6 +596,7 @@ int main(int argc, char **argv) {
     }
 
     load_image();
+    enhance_image();
     build_palette();
 
     if (snap) {
