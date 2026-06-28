@@ -24,6 +24,7 @@
 
 #include "vendor/stb_image.h"
 #include "vendor/stb_image_write.h"
+#include "vendor/font8x8_basic.h"  /* font8x8_basic[128][8], public domain */
 #include "redroom_png.h"   /* redroom_embed_png[], redroom_embed_png_len */
 
 #include <curses.h>
@@ -279,24 +280,36 @@ static void build_target(int c, int r_) {
 /* Snapshot: render the settled mosaic to a PNG for verification            */
 /* ----------------------------------------------------------------------- */
 
+/* blit one 8x8 glyph, scaled to an 8x16 cell, in colour on black */
+static void blit_glyph(unsigned char *out, int W, int ox, int oy,
+                       char ch, unsigned char *rgb) {
+    if ((unsigned char)ch >= 128) ch = '?';
+    const char *bm = font8x8_basic[(int)ch];
+    for (int fy = 0; fy < 8; fy++) {
+        unsigned char bits = (unsigned char)bm[fy];
+        for (int fx = 0; fx < 8; fx++) {
+            if (!(bits & (1u << fx))) continue;
+            int px = ox + fx;
+            for (int d = 0; d < 2; d++) {       /* 8 rows -> 16 (cell is 2:1) */
+                int py = oy + fy*2 + d;
+                unsigned char *o = out + ((size_t)py*W + px)*3;
+                o[0]=rgb[0]; o[1]=rgb[1]; o[2]=rgb[2];
+            }
+        }
+    }
+}
+
+/* render the settled mosaic as real colour-on-black glyphs, like the terminal */
 static int snapshot(const char *path, int c, int r_) {
     N_GLYPHS = strlen(GLYPHS);
     build_target(c, r_);
     int cw = 8, ch = 16;                 /* px per cell (2:1)               */
     int W = cols*cw, H = rows*ch;
-    unsigned char *out = calloc((size_t)W*H*3, 1);
+    unsigned char *out = calloc((size_t)W*H*3, 1);   /* black background     */
     for (int y = 0; y < rows; y++)
         for (int x = 0; x < cols; x++) {
             int idx = CELL(y,x);
-            unsigned char *rgb = &t_rgb[idx*3];
-            /* draw a centred ~62% blob on black to mimic a glowing glyph */
-            int bx0 = x*cw + cw/5, bx1 = (x+1)*cw - cw/5;
-            int by0 = y*ch + ch/5, by1 = (y+1)*ch - ch/5;
-            for (int py = by0; py < by1; py++)
-                for (int px = bx0; px < bx1; px++) {
-                    unsigned char *o = out + ((size_t)py*W + px)*3;
-                    o[0]=rgb[0]; o[1]=rgb[1]; o[2]=rgb[2];
-                }
+            blit_glyph(out, W, x*cw, y*ch, GLYPHS[t_glyph[idx]], &t_rgb[idx*3]);
         }
     int ok = stbi_write_png(path, W, H, 3, out, W*3);
     free(out);
@@ -409,8 +422,8 @@ static void fall_init(void) {
     spd  = malloc(sizeof(double)*cols);
     taillen = malloc(sizeof(int)*cols);
     for (int x = 0; x < cols; x++) {
-        head[x] = -(rand() % (rows + GLOW));      /* staggered start         */
-        spd[x]  = 0.55 + (rand()%100)/100.0*1.1;  /* async speeds            */
+        head[x] = -(rand() % (rows/2 + GLOW));    /* tighter staggered start  */
+        spd[x]  = 0.7 + (rand()%100)/100.0*0.8;   /* async speeds (~5x prior) */
         taillen[x] = GLOW;
     }
 }
@@ -521,7 +534,7 @@ static void usage(void) {
     printf(
 "cpeaks - Twin Peaks Red Room Matrix rain\n\n"
 "Usage: cpeaks [options]\n"
-"  -u N           update delay / speed divisor (1-10, default 3; higher=slower)\n"
+"  -u N           update delay / speed divisor (1-10, default 1; higher=slower)\n"
 "  -a F           cell aspect ratio (height/width, default 2.0)\n"
 "  -n             no curtain drift (settle and hold)\n"
 "  --snapshot F [W H]   render the settled image to PNG F (default grid 100x46)\n"
@@ -536,7 +549,7 @@ int main(int argc, char **argv) {
     srand((unsigned)time(NULL) ^ (unsigned)getpid());
     N_GLYPHS = strlen(GLYPHS);
 
-    int speed_div = 3, do_drift = 1;
+    int speed_div = 1, do_drift = 1;
     const char *snap = NULL, *regf = NULL;
     int snapW = 100, snapH = 46;
 

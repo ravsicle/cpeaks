@@ -19,7 +19,10 @@ against red curtains and the black-and-white chevron floor. Once the image
 forms, the **curtains drift slowly as if in a warm breeze**. Press any key to
 leave.
 
-![the settled image](docs/snap.png)
+![the settled image, rendered as real colour-on-black glyphs](docs/snap.png)
+
+*An actual render of the settled frame (120×50) — colour-on-black glyphs, exactly
+as it appears in the terminal. Larger terminals give a sharper statue.*
 
 ## How it works
 

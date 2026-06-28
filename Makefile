@@ -9,7 +9,7 @@ OBJS = cpeaks.o stb_impl.o
 cpeaks: $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDLIBS)
 
-cpeaks.o: cpeaks.c redroom_png.h vendor/stb_image.h vendor/stb_image_write.h
+cpeaks.o: cpeaks.c redroom_png.h vendor/stb_image.h vendor/stb_image_write.h vendor/font8x8_basic.h
 	$(CC) $(CFLAGS) -c cpeaks.c -o $@
 
 stb_impl.o: stb_impl.c vendor/stb_image.h vendor/stb_image_write.h
