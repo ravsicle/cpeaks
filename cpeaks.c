@@ -301,6 +301,47 @@ static char classify(int r, int g, int b, double sy_norm, double sx_norm) {
     return R_CURTAIN;
 }
 
+/* glyph index of a literal character within GLYPHS (-1 if absent) */
+static int glyph_index_of(char ch) {
+    for (int i = 0; i < N_GLYPHS; i++)
+        if (GLYPHS[i] == ch) return i;
+    return -1;
+}
+
+/* Easter egg: hide Agent Dale COOPER's name in the glyph mosaic. The letters
+ * take on whatever colour their cell already carries, so "COOPER" lurks in the
+ * curtains/floor/statue, readable only if you look. Stamped horizontally with
+ * its top-left at (x0,y); silently skipped if it won't fit. */
+static void stamp_word(const char *word, int x0, int y) {
+    int len = (int)strlen(word);
+    if (y < 0 || y >= rows) return;
+    if (x0 < 0 || x0 + len > cols) return;
+    for (int i = 0; i < len; i++) {
+        int gi = glyph_index_of(word[i]);
+        if (gi >= 0) t_glyph[CELL(y, x0 + i)] = gi;
+    }
+}
+
+/* Stamp "COOPER" in three random, non-overlapping spots — different every run. */
+static void stamp_easter_eggs(void) {
+    const char *word = "COOPER";
+    int len = (int)strlen(word);
+    if (cols < len || rows < 1) return;
+
+    int used_y[3], used_x[3], placed = 0;
+    for (int attempt = 0; attempt < 200 && placed < 3; attempt++) {
+        int x0 = rand() % (cols - len + 1);
+        int y  = rand() % rows;
+        int clash = 0;
+        for (int k = 0; k < placed; k++)
+            if (used_y[k] == y &&
+                !(x0 + len <= used_x[k] || used_x[k] + len <= x0)) { clash = 1; break; }
+        if (clash) continue;
+        stamp_word(word, x0, y);
+        used_x[placed] = x0; used_y[placed] = y; placed++;
+    }
+}
+
 static void free_grid(void) {
     free(t_pal); free(t_glyph); free(t_rgb); free(t_region); free(t_sx);
     t_pal=NULL; t_glyph=NULL; t_rgb=NULL; t_region=NULL; t_sx=NULL;
@@ -343,6 +384,8 @@ static void build_target(int c, int r_) {
             t_sx[idx]      = sx_norm;
         }
     }
+
+    stamp_easter_eggs();
 }
 
 /* ----------------------------------------------------------------------- */
